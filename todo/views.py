@@ -1,28 +1,53 @@
-from django.shortcuts import render, redirect, get_object_or_404
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from rest_framework import status
 from .models import Todo
-from .forms import TodoForm
+from .serializer import TodoSerializer
 
-def todo_list(request):
-    todos = Todo.objects.all().order_by('-created_at')
-    form = TodoForm()
+@api_view(['GET', 'POST'])
+def todo_list_v2(request):
+    if request.method == 'GET':
+        todos = Todo.objects.all().order_by('-created_at')
+        serializer = TodoSerializer(todos, many=True)
+        return Response(serializer.data)
 
-    if request.method == 'POST':
-        form = TodoForm(request.POST)
-        if form.is_valid():
-            form.save()
-            return redirect('todo_list')
+    elif request.method == 'POST':
+        serializer = TodoSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    return render(request, 'todo/todo_list.html', {'todos': todos, 'form': form})
+@api_view(['GET', 'PUT', 'DELETE'])
+def todo_detail_v2(request, pk):
+    try:
+        todo = Todo.objects.get(pk=pk)
+    except Todo.DoesNotExist:
+        return Response(status=status.HTTP_404_NOT_FOUND)
 
-def todo_delete(request, pk):
-    todo = get_object_or_404(Todo, pk=pk)
-    if request.method == 'POST':
+    if request.method == 'GET':
+        serializer = TodoSerializer(todo)
+        return Response(serializer.data)
+
+    elif request.method == 'PUT':
+        serializer = TodoSerializer(todo, data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    elif request.method == 'DELETE':
         todo.delete()
-        return redirect('todo_list')
-    return render(request, 'todo/todo_confirm_delete.html', {'todo': todo})
+        return Response({'message': 'Todo deleted'}, status=status.HTTP_204_NO_CONTENT)
 
-def todo_toggle(request, pk):
-    todo = get_object_or_404(Todo, pk=pk)
+@api_view(['POST'])
+def todo_toggle_v2(request, pk):
+    try:
+        todo = Todo.objects.get(pk=pk)
+    except Todo.DoesNotExist:
+        return Response(status=status.HTTP_404_NOT_FOUND)
+
     todo.completed = not todo.completed
     todo.save()
-    return redirect('todo_list')
+    serializer = TodoSerializer(todo)
+    return Response(serializer.data)
